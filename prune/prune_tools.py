@@ -29,7 +29,7 @@ def parse_moudle_defs(module_defs):
     剪枝原则:
     1. 上采样前面一个CBL不剪
     2. 三个单独的卷积层不剪
-    3. 残差单元和残差大组件中的取舍规则是: shortcut层中的起始末尾层
+    3. 残差单元和残差大组件中的取舍规则是: shortcut层中的起始末尾层不剪
     '''
     CBL_idx = []
     Conv_idx = []
@@ -120,7 +120,6 @@ def updateBN(module_list, s, prune_idx, idx2masks):
             bn_module = module_list[idx][1]
             # 85%通道的保持s    (100-85)%的衰减100倍--> 0.01 * s
             # bn_module.weight.grad.data.sub_(0.5 * s * torch.sign(bn_module.weight.data) * (1 - idx2masks[idx].to(device)))
-            # TODO 这行代码不明白
             bn_module.weight.grad.data.sub_(0.99 * s * torch.sign(bn_module.weight.data) * idx2masks[idx])
             # 这句代码的理解:
             # 在torch的张量运算中:sub_是减运算

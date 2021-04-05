@@ -119,9 +119,10 @@ if __name__ == "__main__":
     ]
 
     if opt.sr:
+        # 只有通道剪枝策略1是普通剪枝，其他都是极限剪枝
         if opt.prune == 0:
-            # 通道剪枝策略1，shortcut层中的起始末尾层
-            CBL_idx, Conv_idx, prune_idx = parse_moudle_defs(model.module_defs)  # TODO 剪枝策略1
+            # 通道剪枝策略1，跳过shortcut层中的起始末尾层, yolo前一层, 上采样前一层
+            CBL_idx, Conv_idx, prune_idx = parse_moudle_defs(model.module_defs)  # TODO 剪枝策略1,普通剪枝
             print('normal sparse training')
         elif opt.prune == 1:
             CBL_idx, _, prune_idx, shortcut_idx, _ = parse_moudle_defs1(model.module_defs)  # TODO 剪枝策略3
@@ -159,10 +160,14 @@ if __name__ == "__main__":
             # TODO 稀疏化训练
             if opt.sr and opt.prune == 0 and epoch > opt.epochs * 0.5:
                 # idx2masks 是一个字典
+                # 稀疏策略3(局部s)+普通通道剪枝
+                # 稀疏策略3: s = s if epoch < epochs * 0.5 else 0.01 * s
                 idx2masks = get_masks(model, prune_idx, 0.85)
             elif opt.sr and opt.prune == 1 and epoch > opt.epochs * 0.5:
+                # 稀疏策略3(局部s)+极限通道剪枝
                 idx2masks = get_masks(model, prune_idx, 0.85)
             else:
+                # 稀疏策略1(全局s)
                 idx2masks = None
             if opt.sr:
                 updateBN(model.module_list, opt.s, prune_idx, idx2masks)
@@ -237,10 +242,13 @@ if __name__ == "__main__":
 
         if epoch % opt.checkpoint_interval == 0:
             torch.save(model.state_dict(), f"checkpoints/yolov3_ckpt_%d.pth" % epoch)
+        elif epoch == opt.epochs:
+            torch.save(model.state_dict(), f'checkpoints/yolov3_ckpt_{epoch}.pth')
 
     # end epoch
-    for idx in prune_idx:
-        bn_weights = gather_bn_weights(model.module_list, [idx])
-        tb_writer.add_histogram('after_train_perlayer_bn_weights/hist', bn_weights.numpy(), idx, bins='doane')
+    if opt.sr:
+        for idx in prune_idx:
+            bn_weights = gather_bn_weights(model.module_list, [idx])
+            tb_writer.add_histogram('after_train_perlayer_bn_weights/hist', bn_weights.numpy(), idx, bins='doane')
 
-    torch.cuda.empty_cache()
+        torch.cuda.empty_cache()
